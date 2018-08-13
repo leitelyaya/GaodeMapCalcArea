@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <script type="text/javascript">
+    </script>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no, width=device-width">
+    <style type="text/css">
+        h3 {
+            font-size: 1.17em;
+            line-height: 1.4;
+            font-weight: bold;
+            margin: 2px;
+        }
+
+        hr {
+            margin: 1px;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0px;
+        }
+
+        .map {
+            height: 100%;
+            width: 100%;
+            float: left;
+        }
+
+        #mapDiv .amap-indoormap-floorbar-control {
+            bottom: 10%
+        }
+
+        .opts {
+            display: block;
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 100px;
+            z-index: 99;
+        }
+    </style>
+    <title>室内地图</title>
+</head>
+<body>
+<div id="mapDiv" class="map" tabindex="0"></div>
+<div class="opts">
+    <button class="opt_clear">清除</button>
+    <button class="opt_next">下一个</button>
+</div>
+<script src="//webapi.amap.com/maps?v=1.4.8&key=1f5c4425fa95fbb8c8e2f79d480763c1" ></script>
+<script type="text/javascript">
+    {#var script = document.createElement('script');   #}
+    {#script.src = "//webapi.amap.com/maps?v=1.4.8&key=1f5c4425fa95fbb8c8e2f79d480763c1";  #}
+    {#document.head.appendChild(script);#}
+
+    var esId = "{{ id }}", floor, floor_indexs;
+    var $ = (s)=>document.querySelector(s);
+    var map, indoorMap, trigger_click_event, save_highlight_image, draw_back_test;
+
+    {#window.onload = function (ev) {#}
+        AMap.plugin(['AMap.IndoorMap'], function () {
+            indoorMap = new AMap.IndoorMap({alwaysShow: true});
+            //设定在没有矢量底图的时候也显示，默认情况下室内图仅在有矢量底图的时候显示
+            map = new AMap.Map('mapDiv', {
+                resizeEnable: false,
+                dragEnable: false,
+                doubleClickZoom: false,
+                rotateEnable: false,
+                zoom: 20,
+                showIndoorMap: false,//隐藏地图自带的室内地图图层
+                layers: [indoorMap]
+            });
+
+            console.log("add indoorMap");
+
+            trigger_click_event = function (x, y) {
+                console.log(map.containTolnglat(new AMap.Pixel(x, y)));
+                var lnglat = map.containTolnglat(new AMap.Pixel(x, y));
+                console.log("lnglat:", lnglat);
+            };
+
+            indoorMap.on("click", function (e) {
+                save_highlight_image(e);
+            });
+
+            indoorMap.on("complete", function (e) {
+                console.log("after indoorMap complete");
+                setTimeout(function () {
+                    {#map.zoomIn();#}
+                    {#map.zoomIn();#}
+                    {#map.zoomIn();#}
+                    map.setStatus({zoomEnable: false});
+                }, 1000);
+            });
+
+            indoorMap.on("floor_complete", function (e) {
+                console.log("after indoorMap floor_complete:", e);
+
+                if (e.status === 0) {
+                    console.log(e.building);
+                    init_floors(e.building);
+                    setTimeout(function () {
+                        save_bg_image(e);
+                    }, 3000);
+                } else if (e.error) {
+                    var s = document.createElement("span");
+                    s.className = "error";
+                    document.body.appendChild(s);
+                }
+            });
+
+            map.on('complete', function () {
+                console.log("after map complete");
+
+                $(".label-image-con").style.visibility = "hidden";
+
+                console.log("showIndoorMap:", esId);
+                indoorMap.showIndoorMap(esId);
+            });
+
+
+            save_highlight_image = function (rst) {
+                var esId = rst.building_id;
+                var floor = rst.floor;
+                var shop_info = rst.shop;
+
+                var highlightCanvas = $(".highlight-image-con canvas");
+
+                if (highlightCanvas) {
+                    var titleCanvas = $(".amap-indoor-map-moverf-marker");
+                    var title = titleCanvas && titleCanvas.innerText || "highlight.png";
+                    // NOTE: 保存图片
+                    // var imgData = highlightCanvas.toDataURL("image/png");
+                    // var a = document.createElement("A");
+                    // a.href = imgData;
+                    // a.download = title;
+                    // a.click();
+                    var p = {x: highlightCanvas.offsetLeft, y: highlightCanvas.offsetTop};
+                    highlightCanvas.toBlob(function (blob) {
+                        var formData = new FormData();
+                        formData.append("id", esId);
+                        formData.append("floor", floor);
+                        formData.append("shopId", shop_info["id"]);
+                        var hc = $(".highlight-image-con canvas");
+                        formData.append("offsetTop", hc.offsetTop);
+                        formData.append("offsetLeft", hc.offsetLeft);
+                        formData.append("file", blob);
+
+                        var request = new XMLHttpRequest();
+                        request.open("POST", "/handle_highlight");
+                        request.send(formData);
+                        request.onreadystatechange = function (ev) {
+                            if (4 === request.readyState && 200 === request.status) {
+                                console.log(p.x, p.y);
+                                console.log(title);
+                                console.log("after:", request.responseText);
+                                var points = JSON.parse(request.responseText);
+                                var lnglats = [];
+                                points.forEach(function (point) {
+                                    var x = point[1] + p.x, y = point[0] + p.y;
+                                    var lnglat = map.containTolnglat(new AMap.Pixel(x, y));
+                                    lnglats.push(lnglat);
+                                });
+                                if (lnglats.length) {
+                                    new AMap.Polygon({
+                                        map: map,
+                                        path: lnglats,
+                                        fillColor: "#FFAA00"
+                                    });
+                                    var area = AMap.GeometryUtil.ringArea(lnglats);
+                                    console.log("area:", area);
+
+                                    var formData = new FormData();
+                                    shop_info = shop_info || {};
+                                    shop_info["foor"] = floor;
+                                    shop_info["lnglats"] = lnglats;
+                                    shop_info["title"] = title;
+                                    shop_info["area"] = area;
+                                    formData.append("id", esId);
+                                    formData.append("shopId", shop_info["id"]);
+                                    formData.append("data", JSON.stringify(shop_info));
+
+                                    var xhr = new XMLHttpRequest();
+                                    xhr.open("POST", "/save_shop_info");
+                                    xhr.send(formData);
+                                }
+                            }
+                        };
+                    }, "image/png");
+                }
+            };
+
+            draw_back_test = function (e) {
+                var hc = $(".highlight-image-con canvas");
+                var c = $(".floor-image-con canvas");
+
+                if (hc) {
+                    var p = {x: hc.offsetLeft, y: hc.offsetTop};
+                    var ctx = c.getContext("2d");
+                    hc.toBlob(function (b) {
+                        createImageBitmap(b).then(function (img) {
+                            console.log(p);
+                            ctx.drawImage(img, p.x, p.y);
+                        })
+                    }, "image/png")
+                }
+            };
+        });
+
+        function save_bg_image(rst) {
+            console.log("save_bg_image:", rst);
+            var bgCanvas = $(".floor-image-con canvas");
+            if (bgCanvas) {
+                bgCanvas.toBlob(function (blob) {
+                    var formData = new FormData();
+                    formData.append("id", rst.building.id);
+                    formData.append("floor", rst.building.floor);
+                    formData.append("file", blob);
+                    var request = new XMLHttpRequest();
+                    request.open("POST", "/save_bg_image");
+                    request.send(formData);
+                }, "image/png")
+            }
+        }
+
+        function init_floors(building) {
+            if (!floor_indexs) {
+                console.log("building", building.id, building);
+                floor_indexs = building["floor_details"]["floor_indexs"].slice(0);
+                floor = building["floor"];
+                floor_indexs.splice(floor_indexs.indexOf(floor), 1);
+            }
+        }
+
+        {#
+        function change_next_building() {
+            var idx = buildings.indexOf(esId);
+            if (idx === buildings.length-1) {
+                throw new Error("没有了");
+            }
+            esId = buildings[idx+1];
+
+            console.log("change_next_building", esId);
+        }
+    #}
+
+        function change_next_floor() {
+            floor = floor_indexs.pop();
+            indoorMap.showFloor(floor, false);
+            console.log("change_next_floor:", esId, floor);
+            if (floor_indexs.length === 0) {
+                $(".opt_next").style.display = "none";
+            }
+        }
+
+        $(".opt_next").onclick = function (ev) {
+            map.clearMap();
+            change_next_floor();
+        };
+
+        $(".opt_clear").onclick = function (ev) {
+            map.clearMap();
+        };
+    //}
+
+</script>
+
+</body>
+
+</html>
