@@ -59,7 +59,7 @@
 
     var esId = "{{ id }}", floor, floor_indexs;
     var $ = (s)=>document.querySelector(s);
-    var map, indoorMap, trigger_click_event, save_highlight_image, draw_back_test;
+    var map, indoorMap, trigger_click_event, save_highlight_image, draw_back_test, save_bg_image;
 
     {#window.onload = function (ev) {#}
         AMap.plugin(['AMap.IndoorMap'], function () {
@@ -209,23 +209,58 @@
                     }, "image/png")
                 }
             };
-        });
 
-        function save_bg_image(rst) {
-            console.log("save_bg_image:", rst);
-            var bgCanvas = $(".floor-image-con canvas");
-            if (bgCanvas) {
-                bgCanvas.toBlob(function (blob) {
-                    var formData = new FormData();
-                    formData.append("id", rst.building.id);
-                    formData.append("floor", rst.building.floor);
-                    formData.append("file", blob);
-                    var request = new XMLHttpRequest();
-                    request.open("POST", "/save_bg_image");
-                    request.send(formData);
-                }, "image/png")
+            save_bg_image = function(rst) {
+                console.log("save_bg_image:", rst);
+                var bgCanvas = $(".floor-image-con canvas");
+                if (bgCanvas) {
+                    var p = {x: bgCanvas.offsetLeft, y: bgCanvas.offsetTop};
+                    bgCanvas.toBlob(function (blob) {
+                        var formData = new FormData();
+                        formData.append("id", rst.building.id);
+                        formData.append("floor", rst.building.floor);
+                        formData.append("file", blob);
+                        var request = new XMLHttpRequest();
+                        request.open("POST", "/save_bg_image");
+                        request.send(formData);
+                        request.onreadystatechange = function (ev) {
+                            if (4 === request.readyState && 200 === request.status) {
+                                console.log("after:", request.responseText);
+                                var points = JSON.parse(request.responseText);
+                                var lnglats = [];
+                                points.forEach(function (point) {
+                                    var x = point[1] + p.x, y = point[0] + p.y;
+                                    var lnglat = map.containTolnglat(new AMap.Pixel(x, y));
+                                    lnglats.push(lnglat);
+                                });
+                                if (lnglats.length) {
+                                    new AMap.Polygon({
+                                        map: map,
+                                        path: lnglats,
+                                        fillColor: "#FFAA00"
+                                    });
+                                    var area = AMap.GeometryUtil.ringArea(lnglats);
+                                    console.log("area:", area);
+
+                                    var formData = new FormData();
+                                    var build_info = rst.building || {};
+                                    build_info["lnglats"] = lnglats;
+                                    build_info["area"] = area;
+                                    formData.append("id", rst.building.id);
+                                    formData.append("floor", rst.building.floor);
+                                    formData.append("data", JSON.stringify(build_info));
+
+                                    var xhr = new XMLHttpRequest();
+                                    xhr.open("POST", "/save_building_info");
+                                    xhr.send(formData);
+                                }
+                            }
+                        };
+                    }, "image/png")
+                }
             }
-        }
+
+        });
 
         function init_floors(building) {
             if (!floor_indexs) {

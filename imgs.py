@@ -10,6 +10,7 @@ from skimage.transform import warp, AffineTransform
 import numpy as np
 import codecs
 import json
+import os
 
 def complex_images():
     bg_name = "data/B0FFF2CO42_1.png"
@@ -31,21 +32,38 @@ def complex_images():
 
 
 def split_space_content():
-    bg_name = "data/B0FFF2CO42_1.png"
-    img = io.imread(bg_name, as_grey=True)
+    for root, dirs, files in os.walk('data'):
+        for fname in files:
+            bg_name = "data/"+fname
+            img = io.imread(bg_name, as_grey=True)
 
-    # 检测canny边缘,得到二值图片
-    edgs = feature.canny(img, sigma=3)
+            # 检测canny边缘,得到二值图片
+            edgs = feature.canny(img, sigma=3)
 
-    chull = morphology.convex_hull_object(edgs)
+            chull = morphology.convex_hull_object(edgs)
 
-    fig, axes = plt.subplots(1, 2, figsize=(8, 8))
-    ax0, ax1 = axes.ravel()
-    ax0.imshow(edgs, plt.cm.gray)
-    ax0.set_title('many objects')
-    ax1.imshow(chull, plt.cm.gray)
-    ax1.set_title('convex_hull image')
-    plt.show()
+            #
+            # fig, axes = plt.subplots(1, 2, figsize=(8, 8))
+            # ax0, ax1 = axes.ravel()
+            # ax0.imshow(edgs, plt.cm.gray)
+            # ax0.set_title('many objects')
+            # ax1.imshow(chull, plt.cm.gray)
+            # ax1.set_title('convex_hull image')
+            # # plt.show()
+
+            plt.imsave("data2/"+fname, chull)
+
+def to_contours():
+    for root, dirs, files in os.walk('data2'):
+        for fname in files:
+            dst = io.imread('data2/'+fname, as_grey=True)
+            contours = measure.find_contours(dst, 0.5)
+            cords = np.concatenate(contours)
+
+            new_img = measure.subdivide_polygon(cords, degree=2, preserve_ends=True)
+            appr_img = measure.approximate_polygon(new_img, tolerance=1)
+
+            print(fname, len(appr_img.tolist()))
 
 def labels():
     bg_name = "data/test.png"
@@ -94,5 +112,6 @@ def trim_data():
 if __name__ == '__main__':
     # complex_images()
     # split_space_content()
+    to_contours()
     # labels()
-    trim_data()
+    # trim_data()

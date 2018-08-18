@@ -1,14 +1,15 @@
 import base64
 import json
-import os
-import random
 
 from flask import Flask, request, render_template
+
 app = Flask(__name__)
 
 import numpy as np
-from skimage import measure,io,color,draw
-from PIL import Image, ImageDraw
+from skimage import measure
+from skimage import io, morphology, feature
+from PIL import Image
+
 
 @app.route('/<id>')
 def index(id):
@@ -55,15 +56,38 @@ def save_bg_image():
         id = request.values["id"]
         floor = request.values["floor"]
         f = request.files['file']
-        fname = "data/%s_%s.png"%(id, floor)
-        f.save(fname)
+        fname = "%s_%s.png"%(id, floor)
+        full_name = 'data/'+fname
+        f.save(full_name)
 
-        return "ok"
+        img = io.imread(full_name, as_grey=True)
+        # 检测canny边缘,得到二值图片
+        edgs = feature.canny(img, sigma=3)
+
+        chull = morphology.convex_hull_object(edgs)
+        io.imsave('data2/'+fname, chull, as_gray=True)
+
+        contours = measure.find_contours(chull, 0.5)
+        cords = np.concatenate(contours)
+
+        new_img = measure.subdivide_polygon(cords, degree=2, preserve_ends=True)
+        appr_img = measure.approximate_polygon(new_img, tolerance=1)
+
+        return json.dumps(appr_img.tolist(), cls=NumpyEncoder)
 
 @app.route("/save_shop_info", methods=['POST'])
 def save_shop_info():
     if request.method == 'POST':
         fname = "data/%s_%s.json"%(request.values["id"], request.values["shopId"])
+        data = request.values["data"]
+        with open(fname, "w") as w:
+            w.write(data)
+        return "ok"
+
+@app.route("/save_building_info", methods=['POST'])
+def save_building_info():
+    if request.method == 'POST':
+        fname = "data2/%s_%sF.json"%(request.values["id"], request.values["floor"])
         data = request.values["data"]
         with open(fname, "w") as w:
             w.write(data)
