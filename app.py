@@ -6,7 +6,7 @@ from flask import Flask, request, render_template
 app = Flask(__name__)
 
 import numpy as np
-from skimage import measure
+from skimage import measure, color
 from skimage import io, morphology, feature
 from PIL import Image
 
@@ -60,20 +60,23 @@ def save_bg_image():
         full_name = 'data/'+fname
         f.save(full_name)
 
-        img = io.imread(full_name, as_grey=True)
-        # 检测canny边缘,得到二值图片
-        edgs = feature.canny(img, sigma=3)
+        img = io.imread(full_name)
+        data_rgb = color.rgba2rgb(img)
+        data_gray = color.rgb2gray(data_rgb)
+        mask = ~(data_gray == 1)
+        data_gray[mask] = 0
 
-        chull = morphology.convex_hull_object(edgs)
-        io.imsave('data2/'+fname, chull, as_gray=True)
+        io.imsave('data2/'+fname, data_gray, as_gray=True)
 
-        contours = measure.find_contours(chull, 0.5)
-        cords = np.concatenate(contours)
+        contours = measure.find_contours(data_gray, 0.5)
 
-        new_img = measure.subdivide_polygon(cords, degree=2, preserve_ends=True)
-        appr_img = measure.approximate_polygon(new_img, tolerance=1)
+        cordarr = []
+        for cords in contours:
+            new_img = measure.subdivide_polygon(cords, degree=2, preserve_ends=True)
+            appr_img = measure.approximate_polygon(new_img, tolerance=1)
+            cordarr.append(appr_img.tolist())
 
-        return json.dumps(appr_img.tolist(), cls=NumpyEncoder)
+        return json.dumps(cordarr, cls=NumpyEncoder)
 
 @app.route("/save_shop_info", methods=['POST'])
 def save_shop_info():

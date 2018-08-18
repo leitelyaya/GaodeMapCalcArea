@@ -226,26 +226,35 @@
                         request.onreadystatechange = function (ev) {
                             if (4 === request.readyState && 200 === request.status) {
                                 console.log("after:", request.responseText);
-                                var points = JSON.parse(request.responseText);
-                                var lnglats = [];
-                                points.forEach(function (point) {
-                                    var x = point[1] + p.x, y = point[0] + p.y;
-                                    var lnglat = map.containTolnglat(new AMap.Pixel(x, y));
-                                    lnglats.push(lnglat);
-                                });
-                                if (lnglats.length) {
-                                    new AMap.Polygon({
-                                        map: map,
-                                        path: lnglats,
-                                        fillColor: "#FFAA00"
-                                    });
-                                    var area = AMap.GeometryUtil.ringArea(lnglats);
-                                    console.log("area:", area);
+                                var cords = JSON.parse(request.responseText);
+                                var totalArea = 0;
+                                var cordsLnglats = [];
 
+                                cords.forEach(function (points) {
+                                    var lnglats = [];
+                                    points.forEach(function (point) {
+                                        var x = point[1] + p.x, y = point[0] + p.y;
+                                        var lnglat = map.containTolnglat(new AMap.Pixel(x, y));
+                                        lnglats.push(lnglat);
+                                    });
+                                    if (lnglats.length) {
+                                        new AMap.Polygon({
+                                            map: map,
+                                            path: lnglats,
+                                            fillColor: "#FFAA00"
+                                        });
+                                        var area = AMap.GeometryUtil.ringArea(lnglats);
+                                        console.log("area:", area);
+                                        totalArea += area;
+                                        cordsLnglats.push(lnglats);
+                                    }
+                                });
+
+                                if (cordsLnglats.length) {
                                     var formData = new FormData();
                                     var build_info = rst.building || {};
-                                    build_info["lnglats"] = lnglats;
-                                    build_info["area"] = area;
+                                    build_info["cordsLnglats"] = cordsLnglats;
+                                    build_info["totalArea"] = totalArea;
                                     formData.append("id", rst.building.id);
                                     formData.append("floor", rst.building.floor);
                                     formData.append("data", JSON.stringify(build_info));
