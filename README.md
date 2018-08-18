@@ -1,7 +1,7 @@
 #### 项目介绍
 高德地图插件，计算室内POI面积
 效果：
-doc/B0FFF0EVLU_1.png
+![POI背景示例](doc/B0FFF0EVLU_1.png)
 
 #### 软件架构
 软件架构说明
