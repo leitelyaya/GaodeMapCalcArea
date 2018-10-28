@@ -9,7 +9,9 @@ import numpy as np
 from skimage import measure, color
 from skimage import io, morphology, feature
 from PIL import Image
+from views import baidu_app
 
+baidu_app.registe_route(app)
 
 @app.route('/<id>')
 def index(id):
@@ -57,26 +59,10 @@ def save_bg_image():
         floor = request.values["floor"]
         f = request.files['file']
         fname = "%s_%s.png"%(id, floor)
-        full_name = 'data/'+fname
+        full_name = 'data3/'+fname
         f.save(full_name)
 
-        img = io.imread(full_name)
-        data_rgb = color.rgba2rgb(img)
-        data_gray = color.rgb2gray(data_rgb)
-        mask = ~(data_gray == 1)
-        data_gray[mask] = 0
-
-        io.imsave('data2/'+fname, data_gray, as_gray=True)
-
-        contours = measure.find_contours(data_gray, 0.5)
-
-        cordarr = []
-        for cords in contours:
-            new_img = measure.subdivide_polygon(cords, degree=2, preserve_ends=True)
-            appr_img = measure.approximate_polygon(new_img, tolerance=1)
-            cordarr.append(appr_img.tolist())
-
-        return json.dumps(cordarr, cls=NumpyEncoder)
+        return "[]"
 
 @app.route("/save_shop_info", methods=['POST'])
 def save_shop_info():
@@ -90,7 +76,7 @@ def save_shop_info():
 @app.route("/save_building_info", methods=['POST'])
 def save_building_info():
     if request.method == 'POST':
-        fname = "data2/%s_%sF.json"%(request.values["id"], request.values["floor"])
+        fname = "data3/%s_%sF.json"%(request.values["id"], request.values["floor"])
         data = request.values["data"]
         with open(fname, "w") as w:
             w.write(data)

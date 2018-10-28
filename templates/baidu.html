@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=yes" />
+    <link href="http://api.map.baidu.com/library/IndoorMap/1.0/src/indoor.min.css?v=1.0.1" rel="stylesheet" type="text/css">
+    <style type="text/css">
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family:"微软雅黑";
+            overflow: hidden;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+    <script type="text/javascript" src="http://api.map.baidu.com/api?v=3.0&ak=jdkh9RGkNsG7w0eWAeP6RWXc"></script>
+    <script type="text/javascript" src="/static/indoor.min.js?s={{ randomKey }}"></script>
+    <title>百度室内地图测量面积</title>
+</head>
+<body>
+    <div id="map"></div>
+</body>
+</html>
+<script type="text/javascript">
+    // 百度地图API功能
+    var map = new BMap.Map("map"); // 创建Map实例
+    var top_left_navigation = new BMap.NavigationControl();  //左上角，添加默认缩放平移控件
+    var top_left_control = new BMap.ScaleControl({anchor: BMAP_ANCHOR_TOP_LEFT});// 左上角，添加比例尺
+    map.addControl(top_left_control);
+    map.addControl(top_left_navigation);
+    map.centerAndZoom(new BMap.Point(116.340739,40.03592), 19);  // 初始化地图,设置中心点坐标和地图级别
+    map.enableScrollWheelZoom(true); // 开启鼠标滚轮缩放
+
+    var config1 = {
+        // 初始化室内图uid,五彩城
+        buildingId: '${id}',
+        // 初始化室内图楼层
+        floor: 'F1',
+        // 室内图最小缩放级别
+        minZoom: 17,
+        // 室内图最大缩放级别
+        maxZoom: 21,
+        // 是否启用室内图
+        enableIndoor: true,
+        // 是否显示底图
+        showBaseMap: false,
+        // 默认显示室内图控件
+        showIndoorControl: true,
+        // 是否显示室内图图标文字
+        showLabel: false,
+        // 默认进入中心点显示室内图控件
+        autoShowIndoorControl: true,
+        // 室内图加载完成事件
+        complete: function (e) {
+            console.log('complete', e);
+            var canvas = e.currentTarget.dR;
+            save_bg_image(canvas);
+        },
+        // 室内图label文字加载完毕后事件
+        indoorClick: function (e) {
+            console.log('indoorClick', e);
+        },
+        // 切换楼层前事件
+        beforeChangeFloor: function (e) {
+            console.log('beforeChangeFloor', e.currentFloor);
+        },
+        // 切换楼层后事件
+        afterChangeFloor: function (e) {
+            console.log('afterChangeFloor', e, e.currentFloor);
+        },
+        // 室内图子点点击响应方法
+        labelClick: function (e) {
+            console.log('labelClick', e.uid);
+        },
+        // 室内图子点获取焦点响应方法
+        labelMouseOver: function (e) {
+            console.log('labelMouseOver', e.uid);
+        },
+        // 室内图子点失去焦点响应方法
+        labelMouseOut: function (e) {
+            console.log('labelMouseOut', e.uid);
+        },
+        getPoiInfoOptions: {
+            // 根据uid获取poi信息接口完成回调函数，（适用于根据uid初始化页面、根据uid设置室内图及楼层、根据uid获取poi信息等方法）
+            onRequestComplete: function (e) {
+                console.log('onRequestComplete', e);
+            },
+            // 根据uid获取poi信息接口成功回调函数
+            onRequestSuccess: function (e) {
+                console.log('onRequestSuccess', e);
+            },
+            // 根据uid获取poi信息接口失败回调函数
+            onRequestError: function (e) {
+                console.log('onRequestError', e);
+            }
+        }
+    };
+
+    // 创建室内图实例
+    var indoorManager = new BMapLib.IndoorManager(map, config1);
+    // 设置室内图参数
+    function setIndoorOptions(config) {
+        indoorManager.setOptions(config);
+    }
+
+    function save_bg_image(bgCanvas) {
+        console.log("save_bg_image");
+        if (bgCanvas) {
+            var p = {x: bgCanvas.offsetLeft, y: bgCanvas.offsetTop};
+            bgCanvas.toBlob(function (blob) {
+                var formData = new FormData();
+                formData.append("id", indoorManager.getBuildingId());
+                formData.append("floor", indoorManager.getFloor());
+                formData.append("file", blob);
+                var request = new XMLHttpRequest();
+                request.open("POST", "/save_bg_image");
+                request.send(formData);
+                request.onreadystatechange = function (ev) {
+                    if (4 === request.readyState && 200 === request.status) {
+                        console.log("after:", request.responseText);
+                        return;
+
+                        var cords = JSON.parse(request.responseText);
+                        var totalArea = 0;
+                        var cordsLnglats = [];
+
+                        cords.forEach(function (points) {
+                            var lnglats = [];
+                            points.forEach(function (point) {
+                                var x = point[1] + p.x, y = point[0] + p.y;
+                                var lnglat = map.containTolnglat(new AMap.Pixel(x, y));
+                                lnglats.push(lnglat);
+                            });
+                            if (lnglats.length) {
+                                new AMap.Polygon({
+                                    map: map,
+                                    path: lnglats,
+                                    fillColor: "#FFAA00"
+                                });
+                                var area = AMap.GeometryUtil.ringArea(lnglats);
+                                console.log("area:", area);
+                                totalArea += area;
+                                cordsLnglats.push(lnglats);
+                            }
+                        });
+
+                        if (cordsLnglats.length) {
+                            var formData = new FormData();
+                            var build_info = rst.building || {};
+                            build_info["cordsLnglats"] = cordsLnglats;
+                            build_info["totalArea"] = totalArea;
+                            formData.append("id", rst.building.id);
+                            formData.append("floor", rst.building.floor);
+                            formData.append("data", JSON.stringify(build_info));
+
+                            var xhr = new XMLHttpRequest();
+                            xhr.open("POST", "/save_building_info");
+                            xhr.send(formData);
+                        }
+                    }
+                };
+            }, "image/png")
+        }
+    }
+
+</script>
